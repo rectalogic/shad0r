@@ -8,6 +8,13 @@
 static GLFWwindow* window = NULL;
 static pthread_mutex_t gl_mutex;
 
+static const GLchar * const VERTEX_SHADER_SOURCE =
+    "out vec2 uv;"
+    "void main() {"
+        "uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
+        "gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);"
+    "}";
+
 typedef struct shad0r_instance {
     unsigned int width;
     unsigned int height;
@@ -205,13 +212,27 @@ void f0r_get_param_value(f0r_instance_t instance, f0r_param_t param, int param_i
 }
 
 void f0r_update2(f0r_instance_t instance,
-    double time,
-    const uint32_t* inframe1,
-    const uint32_t* inframe2,
-    const uint32_t* inframe3,
-    uint32_t* outframe) {
+                 double time,
+                 const uint32_t* inframe1,
+                 const uint32_t* inframe2,
+                 const uint32_t* inframe3,
+                 uint32_t* outframe) {
+    shad0r_instance_t* inst = (shad0r_instance_t *)instance;
+
     pthread_mutex_lock(&gl_mutex);
     glfwMakeContextCurrent(window);
-    //XXX
+
+    glBindTexture(GL_TEXTURE_2D, inst->src_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, inst->width, inst->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, inframe1);
+
+    glBindTexture(GL_TEXTURE_2D, inst->dst_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, inst->width, inst->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, inframe2);
+
+    glBindVertexArray(instance->vao);
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+
     pthread_mutex_unlock(&gl_mutex);
 }
