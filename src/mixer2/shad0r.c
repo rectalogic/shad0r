@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #define GLFW_INCLUDE_GLCOREARB
@@ -8,8 +9,14 @@ static GLFWwindow* window = NULL;
 static pthread_mutex_t gl_mutex;
 
 typedef struct shad0r_instance {
-  GLuint fbo;
-  GLuint rbo;
+    unsigned int width;
+    unsigned int height;
+    GLuint fbo;
+    GLuint rbo;
+    GLuint vao;
+    GLuint program;
+    GLuint src_tex;
+    GLuint dst_tex;
 } shad0r_instance_t;
 
 // glfw context must be current and mutex locked when calling this
@@ -20,11 +27,38 @@ static void destroy(shad0r_instance_t *instance) {
         glDeleteFramebuffers(1, &instance->fbo);
     if (instance->rbo)
         glDeleteRenderbuffers(1, &instance->rbo);
+    if (instance->vao)
+        glDeleteVertexArrays(1, &instance->vao);
+    if (instance->program)
+        glDeleteProgram(instance->program);
+    if (instance->src_tex)
+        glDeleteTextures(1, &instance->src_tex);
+    if (instance->dst_tex)
+        glDeleteTextures(1, &instance->dst_tex);
     free(instance);
 }
 
+static GLuint compile_shader(GLenum shader_type, const GLchar *source) {
+    GLuint shader = glCreateShader(shader_type);
+    glShaderSource(shader, 1, &source, 0);
+    glCompileShader(shader);
+    GLint compiled = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (compiled == GL_FALSE) {
+        GLint log_length = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
+        GLchar *log = malloc(log_length);
+        glGetShaderInfoLog(shader, log_length, &log_length, log);
+        fprintf(stderr, "ERROR: shad0r shader failed to compile\n");
+        fprintf(stderr, "%s\n", log);
+        free(log);
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
 int f0r_init() {
-    //XXX init pthread mutex, glfw
     pthread_mutex_init(&gl_mutex, NULL);
     if (!glfwInit())
         goto error;
@@ -49,7 +83,7 @@ void f0r_deinit() {
 }
 
 void f0r_get_plugin_info(f0r_plugin_info_t* shad0rInfo) {
-    shad0rInfo->name = "Shad0r";
+    shad0rInfo->name = "shad0r";
     shad0rInfo->author = "Andrew Wason";
     shad0rInfo->plugin_type = F0R_PLUGIN_TYPE_MIXER2;
     shad0rInfo->color_model = F0R_COLOR_MODEL_RGBA8888;
@@ -66,6 +100,8 @@ void f0r_get_param_info(f0r_param_info_t* info, int param_index) {
 
 f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     shad0r_instance_t* instance = (shad0r_instance_t *)calloc(1, sizeof(*instance));
+    instance->width = width;
+    instance->height = height;
 
     pthread_mutex_lock(&gl_mutex);
     glfwMakeContextCurrent(window);
