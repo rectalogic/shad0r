@@ -116,13 +116,75 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA, width, height);
     glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, instance->rbo);
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        destroy(instance);
-        instance = NULL;
-        goto error;
-    }
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        goto fail;
  
-error:
+    glGenTextures(1, &instance->src_tex);
+    glBindTexture(GL_TEXTURE_2D, instance->src_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+
+    glGenTextures(1, &instance->dst_tex);
+    glBindTexture(GL_TEXTURE_2D, instance->dst_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+
+    GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
+    if (!vertex_shader)
+        goto fail;
+    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, "XXX");
+    if (!fragment_shader)
+        goto fail;
+
+    instance->program = glCreateProgram();
+    glAttachShader(instance->program, vertex_shader);
+    glAttachShader(instance->program, fragment_shader);
+    glLinkProgram(instance->program);
+
+    GLint linked = 0;
+    glGetProgramiv(instance->program, GL_LINK_STATUS, &linked);
+    if (linked == GL_FALSE) {
+        GLint log_length = 0;
+        glGetProgramiv(instance->program, GL_INFO_LOG_LENGTH, &log_length);
+        GLchar *log = malloc(log_length);
+        glGetProgramInfoLog(instance->program, log_length, &log_length, log);
+        fprintf(stderr, "ERROR: shad0r program failed to link\n");
+        fprintf(stderr, "%s\n", log);
+        free(log);
+        goto fail;
+    }
+
+    // On successful link, detach/delete shaders
+    glDetachShader(instance->program, vertex_shader);
+    glDeleteShader(vertex_shader);
+    glDetachShader(instance->program, fragment_shader);
+    glDeleteShader(fragment_shader);
+ 
+    glGenVertexArrays(1, &instance->vao);
+
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        fprintf(stderr, "ERROR: shad0r GL error %x\n", error);
+        goto fail;
+    }
+
+    goto unlock;
+
+fail:
+    if (vertex_shader) {
+        if (instance->program)
+            glDetachShader(instance->program, vertex_shader);
+        glDeleteShader(vertex_shader);
+    }
+    if (fragment_shader) {
+        if (instance->program)
+            glDetachShader(instance->program, fragment_shader);
+        glDeleteShader(fragment_shader);
+    }
+    destroy(instance);
+    instance = NULL;
+
+unlock:
     pthread_mutex_unlock(&gl_mutex);
     return (f0r_instance_t)instance;
 }
