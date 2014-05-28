@@ -9,10 +9,18 @@ static GLFWwindow* window = NULL;
 static pthread_mutex_t gl_mutex;
 
 static const GLchar * const VERTEX_SHADER_SOURCE =
-    "out vec2 uv;"
+    "in vec2 position;"
     "void main() {"
-        "uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
-        "gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);"
+        "gl_Position = vec4(2.0 * position - 1.0, 0.0, 1.0);"
+    "}";
+
+//XXX temporary
+static const GLchar * const FRAGMENT_SHADER_SOURCE =
+    "uniform sampler2D from, to;"
+    "uniform vec2 resolution;"
+    "void main() {"
+        "vec2 p = gl_FragCoord.xy / resolution.xy;"
+        "gl_FragColor = mix(texture2D(from, p), texture2D(to, p), 0.5);"
     "}";
 
 typedef struct shad0r_instance {
@@ -21,6 +29,7 @@ typedef struct shad0r_instance {
     GLuint fbo;
     GLuint rbo;
     GLuint vao;
+    GLuint vbo;
     GLuint program;
     GLuint src_tex;
     GLuint dst_tex;
@@ -36,6 +45,8 @@ static void destroy(shad0r_instance_t *instance) {
         glDeleteRenderbuffers(1, &instance->rbo);
     if (instance->vao)
         glDeleteVertexArrays(1, &instance->vao);
+    if (instance->vbo)
+        glDeleteBuffers(1, &instance->vbo);
     if (instance->program)
         glDeleteProgram(instance->program);
     if (instance->src_tex)
@@ -63,6 +74,25 @@ static GLuint compile_shader(GLenum shader_type, const GLchar *source) {
         return 0;
     }
     return shader;
+}
+
+static GLuint create_texture() {
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return tex;
+}
+
+// program should be in use
+static void bind_texture_uniform(GLuint program, const GLchar *name, GLuint tex, GLenum unit) {
+    GLint location = glGetUniformLocation(program, name);
+    glActiveTexture(unit);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glUniform1i(location, unit);
 }
 
 int f0r_init() {
@@ -113,8 +143,6 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     pthread_mutex_lock(&gl_mutex);
     glfwMakeContextCurrent(window);
 
-    //XXX compile shader, create FBO and textures
-
     glGenFramebuffers(1, &instance->fbo);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, instance->fbo);
  
@@ -126,20 +154,18 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     if (status != GL_FRAMEBUFFER_COMPLETE)
         goto fail;
  
-    glGenTextures(1, &instance->src_tex);
-    glBindTexture(GL_TEXTURE_2D, instance->src_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-
-    glGenTextures(1, &instance->dst_tex);
-    glBindTexture(GL_TEXTURE_2D, instance->dst_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    instance->src_tex = create_texture();
+    if (!instance->src_tex)
+        goto fail;
+    instance->dst_tex = create_texture();
+    if (!instance->dst_tex)
+        goto fail;
 
     GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
     if (!vertex_shader)
         goto fail;
-    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, "XXX");
+    //XXX load webgl shader file and translate
+    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE);
     if (!fragment_shader)
         goto fail;
 
@@ -164,10 +190,35 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     // On successful link, detach/delete shaders
     glDetachShader(instance->program, vertex_shader);
     glDeleteShader(vertex_shader);
+    vertex_shader = 0;
     glDetachShader(instance->program, fragment_shader);
     glDeleteShader(fragment_shader);
- 
+    fragment_shader = 0;
+
+    //XXX use parameterized uniform names
+    glUseProgram(instance->program);
+    bind_texture_uniform(instance->program, "from", instance->src_tex, GL_TEXTURE0);
+    bind_texture_uniform(instance->program, "to", instance->dst_tex, GL_TEXTURE1);
+    GLint location = glGetUniformLocation(instance->program, "resolution");
+    glUniform2f(location, width, height);
+
     glGenVertexArrays(1, &instance->vao);
+    glBindVertexArray(instance->vao);
+    GLfloat x1 = 0, x2 = width, y1 = 0, y2 = height;
+    GLfloat vertices[] = {
+        x1, y1,
+        x2, y1,
+        x1, y2,
+        x1, y2,
+        x2, y1,
+        x2, y2,
+    };
+    glGenBuffers(1, &instance->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, instance->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    GLuint position = glGetAttribLocation(instance->program, "position");
+    glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(position);
 
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
@@ -228,11 +279,14 @@ void f0r_update2(f0r_instance_t instance,
     glBindTexture(GL_TEXTURE_2D, inst->dst_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, inst->width, inst->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, inframe2);
 
-    glBindVertexArray(instance->vao);
-
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, inst->fbo);
+    glViewport(0, 0, inst->width, inst->height);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glUseProgram(inst->program);
+    glBindVertexArray(inst->vao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
+    glReadPixels(0, 0, inst->width, inst->height, GL_RGBA, GL_UNSIGNED_BYTE, outframe);
 
     pthread_mutex_unlock(&gl_mutex);
 }
