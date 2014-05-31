@@ -9,6 +9,7 @@ static GLFWwindow* window = NULL;
 static pthread_mutex_t gl_mutex;
 
 static const GLchar * const VERTEX_SHADER_SOURCE =
+    "#version 150 core\n"
     "in vec2 position;"
     "void main() {"
         "gl_Position = vec4(2.0 * position - 1.0, 0.0, 1.0);"
@@ -16,11 +17,13 @@ static const GLchar * const VERTEX_SHADER_SOURCE =
 
 //XXX temporary
 static const GLchar * const FRAGMENT_SHADER_SOURCE =
+    "#version 150 core\n"
+    "out vec4 color;"
     "uniform sampler2D from, to;"
     "uniform vec2 resolution;"
     "void main() {"
         "vec2 p = gl_FragCoord.xy / resolution.xy;"
-        "gl_FragColor = mix(texture2D(from, p), texture2D(to, p), 0.5);"
+        "color = mix(texture(from, p), texture(to, p), 0.5);"
     "}";
 
 typedef struct shad0r_instance {
