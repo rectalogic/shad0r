@@ -95,16 +95,26 @@ static void bind_texture_uniform(GLuint program, const GLchar *name, GLuint tex,
     glUniform1i(location, unit);
 }
 
+static void error_handler(int code, const char *message) {
+    fprintf(stderr, "ERROR: shad0r glfw error code 0x%x: %s\n", code, message);
+}
+
 int f0r_init() {
-    pthread_mutex_init(&gl_mutex, NULL);
+    if (window)
+        goto finish;
+    glfwSetErrorCallback(error_handler);
     if (!glfwInit())
-        goto error;
+        goto finish;
     glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, 0);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     window = glfwCreateWindow(1, 1, "shad0r", NULL, NULL);
+    pthread_mutex_init(&gl_mutex, NULL);
 
-error:
+finish:
     return window ? 1 : 0;
 }
 
