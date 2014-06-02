@@ -91,9 +91,9 @@ static GLuint create_texture() {
 }
 
 // program should be in use
-static void bind_texture_uniform(GLuint program, const GLchar *name, GLuint tex, GLenum unit) {
+static void bind_texture_uniform(GLuint program, const GLchar *name, GLuint tex, GLuint unit) {
     GLint location = glGetUniformLocation(program, name);
-    glActiveTexture(unit);
+    glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(GL_TEXTURE_2D, tex);
     glUniform1i(location, unit);
 }
@@ -210,8 +210,8 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
 
     //XXX use parameterized uniform names
     glUseProgram(instance->program);
-    bind_texture_uniform(instance->program, "from", instance->src_tex, GL_TEXTURE0);
-    bind_texture_uniform(instance->program, "to", instance->dst_tex, GL_TEXTURE1);
+    bind_texture_uniform(instance->program, "from", instance->src_tex, 0);
+    bind_texture_uniform(instance->program, "to", instance->dst_tex, 1);
     GLint location = glGetUniformLocation(instance->program, "resolution");
     glUniform2f(location, width, height);
 
