@@ -230,12 +230,14 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     glBindBuffer(GL_ARRAY_BUFFER, instance->vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     GLuint position = glGetAttribLocation(instance->program, "position");
-    glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(position);
+    glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
-        fprintf(stderr, "ERROR: shad0r GL error %x\n", error);
+        fprintf(stderr, "ERROR: shad0r GL error 0x%x\n", error);
         goto fail;
     }
 
