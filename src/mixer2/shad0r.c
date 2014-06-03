@@ -20,10 +20,11 @@ static const GLchar * const FRAGMENT_SHADER_SOURCE =
     "#version 150 core\n"
     "out vec4 color;"
     "uniform sampler2D from, to;"
+    "uniform float progress;"
     "uniform vec2 resolution;"
     "void main() {"
         "vec2 p = gl_FragCoord.xy / resolution.xy;"
-        "color = mix(texture(from, p), texture(to, p), 0.5);"
+        "color = mix(texture(from, p), texture(to, p), progress);"
     "}";
 
 typedef struct shad0r_instance {
@@ -36,6 +37,7 @@ typedef struct shad0r_instance {
     GLuint program;
     GLuint src_tex;
     GLuint dst_tex;
+    GLint progress_location;
 } shad0r_instance_t;
 
 // glfw context must be current and mutex locked when calling this
@@ -214,6 +216,7 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     bind_texture_uniform(instance->program, "to", instance->dst_tex, 1);
     GLint location = glGetUniformLocation(instance->program, "resolution");
     glUniform2f(location, width, height);
+    instance->progress_location = glGetUniformLocation(instance->program, "progress");
 
     glGenVertexArrays(1, &instance->vao);
     glBindVertexArray(instance->vao);
@@ -294,7 +297,9 @@ void f0r_update2(f0r_instance_t instance,
     glBindTexture(GL_TEXTURE_2D, inst->dst_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, inst->width, inst->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, inframe2);
 
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, inst->fbo);
+    glUniform1f(inst->progress_location, time);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, inst->fbo);
     glViewport(0, 0, inst->width, inst->height);
     glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(inst->program);
