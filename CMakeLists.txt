@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.5)
-project(shad0r C)
+project(shad0r C CXX)
 
 if (${CMAKE_C_COMPILER_ID} MATCHES GNU)
   set(CMAKE_C_FLAGS "-std=c99 -Wall -Werror")

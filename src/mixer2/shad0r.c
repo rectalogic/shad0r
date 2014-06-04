@@ -3,9 +3,12 @@
 #include <pthread.h>
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
+#include <GLSLANG/ShaderLang.h>
 #include <frei0r.h>
 
 static GLFWwindow* window = NULL;
+static ShBuiltInResources angle_resources;
+
 static pthread_mutex_t gl_mutex;
 
 static const GLchar * const VERTEX_SHADER_SOURCE =
@@ -117,6 +120,24 @@ int f0r_init() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     window = glfwCreateWindow(1, 1, "shad0r", NULL, NULL);
+
+    // Initialize ANGLE
+    if (window) {
+        glfwMakeContextCurrent(window);
+        ShInitialize();
+        ShInitBuiltInResources(&angle_resources);
+        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &angle_resources.MaxVertexAttribs);
+        glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &angle_resources.MaxVertexUniformVectors);
+        glGetIntegerv(GL_MAX_VARYING_VECTORS, &angle_resources.MaxVaryingVectors);
+        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxVertexTextureImageUnits);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &angle_resources.MaxCombinedTextureImageUnits); 
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxTextureImageUnits);
+        glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &angle_resources.MaxFragmentUniformVectors);
+        // Always set to 1 for OpenGL ES.
+        angle_resources.MaxDrawBuffers = 1;
+    }
+
+
     pthread_mutex_init(&gl_mutex, NULL);
 
 finish:
