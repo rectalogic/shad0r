@@ -20,14 +20,15 @@ static const GLchar * const VERTEX_SHADER_SOURCE =
 
 //XXX temporary
 static const GLchar * const FRAGMENT_SHADER_SOURCE =
-    "#version 150 core\n"
-    "out vec4 color;"
+    "#ifdef GL_ES\n"
+    "precision highp float;\n"
+    "#endif\n"
     "uniform sampler2D from, to;"
     "uniform float progress;"
     "uniform vec2 resolution;"
     "void main() {"
         "vec2 p = gl_FragCoord.xy / resolution.xy;"
-        "color = mix(texture(from, p), texture(to, p), progress);"
+        "gl_FragColor = mix(texture2D(from, p), texture2D(to, p), progress);"
     "}";
 
 typedef struct shad0r_instance {
@@ -133,8 +134,10 @@ int f0r_init() {
         glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &angle_resources.MaxCombinedTextureImageUnits); 
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxTextureImageUnits);
         glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &angle_resources.MaxFragmentUniformVectors);
+
         // Always set to 1 for OpenGL ES.
         angle_resources.MaxDrawBuffers = 1;
+        angle_resources.FragmentPrecisionHigh = 1;
     }
 
 
@@ -145,6 +148,7 @@ finish:
 }
 
 void f0r_deinit() {
+    ShFinalize();
     //XXX can only be called from main thread, must not be current on any other threads
     if (window) {
         glfwMakeContextCurrent(window);
@@ -197,12 +201,34 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     if (!instance->dst_tex)
         goto fail;
 
+    ShHandle fragment_compiler = ShConstructCompiler(SH_FRAGMENT_SHADER, SH_WEBGL_SPEC, SH_GLSL_OUTPUT, &angle_resources);
+    if (!fragment_compiler)
+        goto fail;
+    //XXX load webgl shader file
+    if (!ShCompile(fragment_compiler, &FRAGMENT_SHADER_SOURCE, 1, SH_OBJECT_CODE)) {
+        size_t log_length = 0;
+        ShGetInfo(fragment_compiler, SH_INFO_LOG_LENGTH, &log_length);
+        char *log = malloc(log_length);
+        ShGetInfoLog(fragment_compiler, log);
+        fprintf(stderr, "ERROR: shad0r WebGL shader failed to compile\n");
+        fprintf(stderr, "%s\n", log);
+        free(log);
+        goto fail;
+    }
+    GLuint fragment_shader = 0;
+    size_t translated_source_length = 0;
+    ShGetInfo(fragment_compiler, SH_OBJECT_CODE_LENGTH, &translated_source_length);
+    if (translated_source_length > 1) {
+        char *translated_source = malloc(translated_source_length);
+        ShGetObjectCode(fragment_compiler, translated_source);
+        fprintf(stderr, "%s\n", translated_source);//XXX
+        fragment_shader = compile_shader(GL_FRAGMENT_SHADER, translated_source);
+        free(translated_source);
+        if (!fragment_shader)
+            goto fail;
+    }
     GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
     if (!vertex_shader)
-        goto fail;
-    //XXX load webgl shader file and translate
-    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE);
-    if (!fragment_shader)
         goto fail;
 
     instance->program = glCreateProgram();
@@ -268,6 +294,8 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     goto unlock;
 
 fail:
+    if (fragment_compiler)
+        ShDestruct(fragment_compiler);
     if (vertex_shader) {
         if (instance->program)
             glDetachShader(instance->program, vertex_shader);
