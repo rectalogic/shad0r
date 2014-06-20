@@ -4,7 +4,7 @@ shad0r
 
 Building
 --------
-Install cmake, glfw3, frei0r, pkgconfig, pthreads. Initialize [ANGLE](https://code.google.com/p/angleproject/) submodule `git submodule update --init`.
+Install cmake, glew, glfw3, frei0r, pkgconfig, pthreads. Initialize [ANGLE](https://code.google.com/p/angleproject/) submodule `git submodule update --init`.
 
     mkdir build
     cd build
@@ -19,4 +19,4 @@ Running
 
 Issues
 ------
-This is a work in progress. Currently doesn't work on MacOS because we use a core OpenGL profile and Apple OpenGL requires `#version` in the shader, but ANGLE does not always generate it. Also frei0r mixer2 time is effectively wall-clock time, not normalized to 0..1. This isn't useful.
+This is a work in progress. Still need to add actual WebGL shader loading (currently hardcoded shader), and the ability to set uniforms. Also frei0r mixer2 time is effectively wall-clock time, not normalized to 0..1. This isn't useful.
