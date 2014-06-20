@@ -1,6 +1,7 @@
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenGL)
+pkg_search_module(GLEW REQUIRED glew)
 pkg_search_module(GLFW REQUIRED glfw3)
 pkg_search_module(FREI0R REQUIRED frei0r)
 
@@ -10,10 +11,11 @@ include_directories(
     ${ANGLE_DIR}/include
     ${ANGLE_DIR}/src
     ${OPENGL_INCLUDE_DIR}
+    ${GLEW_INCLUDE_DIRS}
     ${GLFW_INCLUDE_DIRS}
     ${FREI0R_INCLUDE_DIRS}
 )
-link_directories(${GLFW_LIBRARY_DIRS})
+link_directories(${GLEW_LIBRARY_DIRS} ${GLFW_LIBRARY_DIRS})
 
 set(ANGLE_SOURCES
     ${ANGLE_DIR}/include/GLSLANG/ShaderLang.h
@@ -182,6 +184,7 @@ add_library(shad0r MODULE
 
 target_link_libraries(shad0r
     ${OPENGL_LIBRARIES}
+    ${GLEW_LIBRARIES}
     ${GLFW_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )

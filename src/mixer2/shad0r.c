@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#define GLFW_INCLUDE_GLCOREARB
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <GLSLANG/ShaderLang.h>
 #include <frei0r.h>
@@ -29,8 +29,7 @@ static ShBuiltInResources angle_resources;
 static pthread_mutex_t gl_mutex;
 
 static const GLchar * const VERTEX_SHADER_SOURCE =
-    "#version 150 core\n"
-    "in vec2 position;"
+    "attribute vec2 position;"
     "void main() {"
         "gl_Position = vec4(2.0 * position - 1.0, 0.0, 1.0);"
     "}";
@@ -133,28 +132,36 @@ int f0r_init() {
         goto finish;
     glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
     glfwWindowHint(GLFW_DEPTH_BITS, 0);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     window = glfwCreateWindow(1, 1, "shad0r", NULL, NULL);
 
-    // Initialize ANGLE
+    // Initialize ANGLE and glew
     if (window) {
         glfwMakeContextCurrent(window);
-        ShInitialize();
-        ShInitBuiltInResources(&angle_resources);
-        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &angle_resources.MaxVertexAttribs);
-        glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &angle_resources.MaxVertexUniformVectors);
-        glGetIntegerv(GL_MAX_VARYING_VECTORS, &angle_resources.MaxVaryingVectors);
-        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxVertexTextureImageUnits);
-        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &angle_resources.MaxCombinedTextureImageUnits); 
-        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxTextureImageUnits);
-        glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &angle_resources.MaxFragmentUniformVectors);
 
-        // Always set to 1 for OpenGL ES.
-        angle_resources.MaxDrawBuffers = 1;
-        angle_resources.FragmentPrecisionHigh = 1;
+        GLenum err = glewInit();
+        if (err == GLEW_OK && GLEW_ARB_framebuffer_object) {
+            ShInitialize();
+            ShInitBuiltInResources(&angle_resources);
+            glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &angle_resources.MaxVertexAttribs);
+            glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &angle_resources.MaxVertexUniformVectors);
+            glGetIntegerv(GL_MAX_VARYING_VECTORS, &angle_resources.MaxVaryingVectors);
+            glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxVertexTextureImageUnits);
+            glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &angle_resources.MaxCombinedTextureImageUnits);
+            glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxTextureImageUnits);
+            glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &angle_resources.MaxFragmentUniformVectors);
+
+            // Always set to 1 for OpenGL ES.
+            angle_resources.MaxDrawBuffers = 1;
+            angle_resources.FragmentPrecisionHigh = 1;
+        }
+        else {
+            if (err != GLEW_OK)
+                fprintf(stderr, "ERROR: shad0r glew error %s\n", glewGetErrorString(err));
+            else
+                fprintf(stderr, "ERROR: shad0r glew required extensions are not available\n");
+        }
     }
 
 
@@ -238,7 +245,6 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     if (translated_source_length > 1) {
         char *translated_source = malloc(translated_source_length);
         ShGetObjectCode(fragment_compiler, translated_source);
-        fprintf(stderr, "%s\n", translated_source);//XXX
         fragment_shader = compile_shader(GL_FRAGMENT_SHADER, translated_source);
         free(translated_source);
         if (!fragment_shader)
