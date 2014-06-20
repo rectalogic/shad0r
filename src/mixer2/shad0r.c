@@ -52,8 +52,8 @@ typedef struct shad0r_instance {
     unsigned int height;
     GLuint fbo;
     GLuint rbo;
-    GLuint vao;
     GLuint vbo;
+    GLuint ebo;
     GLuint program;
     GLuint src_tex;
     GLuint dst_tex;
@@ -68,10 +68,10 @@ static void destroy(shad0r_instance_t *instance) {
         glDeleteFramebuffers(1, &instance->fbo);
     if (instance->rbo)
         glDeleteRenderbuffers(1, &instance->rbo);
-    if (instance->vao)
-        glDeleteVertexArrays(1, &instance->vao);
     if (instance->vbo)
         glDeleteBuffers(1, &instance->vbo);
+    if (instance->ebo)
+        glDeleteBuffers(1, &instance->ebo);
     if (instance->program)
         glDeleteProgram(instance->program);
     if (instance->src_tex)
@@ -145,12 +145,12 @@ int f0r_init() {
             ShInitialize();
             ShInitBuiltInResources(&angle_resources);
             glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &angle_resources.MaxVertexAttribs);
-            glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &angle_resources.MaxVertexUniformVectors);
-            glGetIntegerv(GL_MAX_VARYING_VECTORS, &angle_resources.MaxVaryingVectors);
+            glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &angle_resources.MaxVertexUniformVectors);
+            glGetIntegerv(GL_MAX_VARYING_FLOATS, &angle_resources.MaxVaryingVectors);
             glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxVertexTextureImageUnits);
             glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &angle_resources.MaxCombinedTextureImageUnits);
             glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &angle_resources.MaxTextureImageUnits);
-            glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &angle_resources.MaxFragmentUniformVectors);
+            glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &angle_resources.MaxFragmentUniformVectors);
 
             // Always set to 1 for OpenGL ES.
             angle_resources.MaxDrawBuffers = 1;
@@ -288,15 +288,11 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     glUniform2f(location, width, height);
     instance->progress_location = glGetUniformLocation(instance->program, "progress");
 
-    glGenVertexArrays(1, &instance->vao);
-    glBindVertexArray(instance->vao);
     GLfloat x1 = 0, x2 = width, y1 = 0, y2 = height;
     GLfloat vertices[] = {
         x1, y1,
         x2, y1,
         x1, y2,
-        x1, y2,
-        x2, y1,
         x2, y2,
     };
     glGenBuffers(1, &instance->vbo);
@@ -306,7 +302,12 @@ f0r_instance_t f0r_construct(unsigned int width, unsigned int height) {
     glEnableVertexAttribArray(position);
     glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+
+    GLushort elements[] = { 0, 1, 2, 3 };
+    glGenBuffers(1, &instance->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, instance->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
@@ -375,8 +376,9 @@ void f0r_update2(f0r_instance_t instance,
     glViewport(0, 0, inst->width, inst->height);
     glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(inst->program);
-    glBindVertexArray(inst->vao);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, inst->ebo);
+    glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, 0);
 
     glReadPixels(0, 0, inst->width, inst->height, GL_RGBA, GL_UNSIGNED_BYTE, outframe);
 
